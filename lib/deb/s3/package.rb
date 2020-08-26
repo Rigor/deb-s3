@@ -62,9 +62,9 @@ class Deb::S3::Package
       # implementation won't support LZMA)
       # https://wiki.debian.org/DebianRepository/Format#Compression_of_indices
       case extension
-      when 'gz' then 'z'
-      when 'xz' then 'J'
-      when 'bz2' then 'j'
+      when '.gz' then 'z'
+      when '.xz' then 'J'
+      when '.bz2' then 'j'
       else ''
       end
     end
