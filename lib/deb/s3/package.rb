@@ -55,6 +55,20 @@ class Deb::S3::Package
       p
     end
 
+    def encoding_flag(control_file)
+      extension = File.extname(control_file)
+
+      # These are all of the valid compression for PPA indices (this
+      # implementation won't support LZMA)
+      # https://wiki.debian.org/DebianRepository/Format#Compression_of_indices
+      case extension
+      when 'gz' then 'z'
+      when 'xz' then 'J'
+      when 'bz2' then 'j'
+      else ''
+      end
+    end
+
     def extract_control(package)
       if system("which dpkg > /dev/null 2>&1")
         `dpkg -f #{package}`
@@ -64,6 +78,8 @@ class Deb::S3::Package
         control_file = package_files.split("\n").select do |file|
           file.start_with?("control.")
         end.first
+
+        enc_flag = encoding_flag(control_file)
 
         # ar fails to find the control.tar.gz tarball within the .deb
         # on Mac OS. Try using ar to list the control file, if found,
@@ -78,7 +94,7 @@ class Deb::S3::Package
         end
 
         Dir.mktmpdir do |path|
-          safesystem("#{extract_control_tarball_cmd} | tar -zxf - -C #{path}")
+          safesystem("#{extract_control_tarball_cmd} | tar -#{enc_flag}xf - -C #{path}")
           File.read(File.join(path, "control"))
         end
       end
