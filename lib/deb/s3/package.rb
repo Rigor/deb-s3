@@ -55,24 +55,46 @@ class Deb::S3::Package
       p
     end
 
+    def encoding_flag(control_file)
+      extension = File.extname(control_file)
+
+      # These are all of the valid compression for PPA indices (this
+      # implementation won't support LZMA)
+      # https://wiki.debian.org/DebianRepository/Format#Compression_of_indices
+      case extension
+      when 'gz' then 'z'
+      when 'xz' then 'J'
+      when 'bz2' then 'j'
+      else ''
+      end
+    end
+
     def extract_control(package)
       if system("which dpkg > /dev/null 2>&1")
         `dpkg -f #{package}`
       else
+        # use ar to determine control file name (control.ext)
+        package_files = `ar t #{package}`
+        control_file = package_files.split("\n").select do |file|
+          file.start_with?("control.")
+        end.first
+
+        enc_flag = encoding_flag(control_file)
+
         # ar fails to find the control.tar.gz tarball within the .deb
         # on Mac OS. Try using ar to list the control file, if found,
         # use ar to extract, otherwise attempt with tar which works on OS X.
-        extract_control_tarball_cmd = "ar p #{package} control.tar.gz"
+        extract_control_tarball_cmd = "ar p #{package} #{control_file}"
 
         begin
-          safesystem("ar t #{package} control.tar.gz &> /dev/null")
+          safesystem("ar t #{package} #{control_file} &> /dev/null")
         rescue SafeSystemError
           warn "Failed to find control data in .deb with ar, trying tar."
-          extract_control_tarball_cmd = "tar zxf #{package} --to-stdout control.tar.gz"
+          extract_control_tarball_cmd = "tar zxf #{package} --to-stdout #{control_file}"
         end
 
         Dir.mktmpdir do |path|
-          safesystem("#{extract_control_tarball_cmd} | tar -zxf - -C #{path}")
+          safesystem("#{extract_control_tarball_cmd} | tar -#{enc_flag}xf - -C #{path}")
           File.read(File.join(path, "control"))
         end
       end
